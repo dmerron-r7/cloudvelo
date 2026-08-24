@@ -141,6 +141,26 @@ func (self *Repository) List(
 
 }
 
+// This repository is stateless so it keeps no tag metadata of its own.
+// Built in artifacts (which carry the tags) are held by the parent
+// repository, so delegate there when we have one. We deliberately do not
+// propagate an error because the only caller fails the entire
+// ListAvailableArtifacts request on error, which would break artifact
+// listing in the GUI.
+func (self *Repository) Tags(
+	ctx context.Context,
+	config_obj *config_proto.Config) ([]string, error) {
+
+	if self.parent != nil {
+		tags, err := self.parent.Tags(ctx, self.parent_config_obj)
+		if err == nil {
+			return tags, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (self *Repository) Copy() services.Repository {
 	return self
 }

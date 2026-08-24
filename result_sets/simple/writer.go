@@ -67,6 +67,22 @@ func (self *ElasticSimpleResultSetWriter) WriteJSONL(
 	}
 }
 
+// The Elastic backend stores plain JSONL rows so there is nowhere to keep
+// a compressed blob and its chunk index. Inflate the batch and store it as
+// normal rows rather than dropping it. Like the upstream implementation the
+// interface gives us no way to report an error.
+func (self *ElasticSimpleResultSetWriter) WriteCompressedJSONL(
+	serialized []byte, byte_offset uint64,
+	uncompressed_size int, total_rows uint64) {
+
+	uncompressed, err := utils.Uncompress(self.ctx, serialized)
+	if err != nil {
+		return
+	}
+
+	self.WriteJSONL(uncompressed, total_rows)
+}
+
 func (self *ElasticSimpleResultSetWriter) Write(row *ordereddict.Dict) {
 	serialized, err := json.MarshalWithOptions(row, self.opts)
 	if err != nil {

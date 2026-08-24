@@ -51,6 +51,7 @@ type ClientRecord struct {
 	Labels             []string `json:"labels,omitempty"`
 	LowerLabels        []string `json:"lower_labels,omitempty"`
 	DocType            string   `json:"doc_type"`
+	Timestamp          uint64   `json:"timestamp"`
 }
 
 func ToClientInfo(record *ClientRecord) *services.ClientInfo {
@@ -74,6 +75,8 @@ func GetMultipleClients(
 	ctx context.Context,
 	config_obj *config_proto.Config,
 	client_ids []string) ([]*ClientRecord, error) {
+
+	cvelo_services.Count("GetMultipleClients")
 
 	terms := make([]string, 0, 2*len(client_ids))
 	for _, i := range client_ids {

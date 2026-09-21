@@ -287,8 +287,7 @@ func (self *LauncherTestSuite) assertFlowReadableAfterCacheWarmed(
 	launcher, err := services.GetLauncher(config_obj)
 	assert.NoError(self.T(), err)
 
-	// Populates the snapshot, which then holds the first flow but not the
-	// second.
+	// Populates the snapshot, which then holds the first flow but not the second.
 	self.warmFlowCache(config_obj, client_id, first_flow_id)
 
 	closer := utils.SetFlowIdForTests(second_flow_id)

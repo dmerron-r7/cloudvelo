@@ -11,6 +11,7 @@ import (
 	cvelo_services "www.velocidex.com/golang/cloudvelo/services"
 	"www.velocidex.com/golang/cloudvelo/services/client_info"
 	"www.velocidex.com/golang/cloudvelo/testsuite"
+	actions_proto "www.velocidex.com/golang/velociraptor/actions/proto"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
 	crypto_proto "www.velocidex.com/golang/velociraptor/crypto/proto"
 	flows_proto "www.velocidex.com/golang/velociraptor/flows/proto"
@@ -57,18 +58,9 @@ func (self *LauncherTestSuite) TestLauncher() {
 
 	closer := utils.SetFlowIdForTests(set_flow_id)
 
-	repository_manager, err := services.GetRepositoryManager(config_obj)
-	assert.NoError(self.T(), err)
+	repository := self.loadTestArtifact(config_obj)
 
-	repository := repository_manager.NewRepository()
-	_, err = repository.LoadYaml(`
-name: TestArtifact
-sources:
-- query: SELECT * FROM info()
-`, services.ArtifactOptions{
-		ValidateArtifact:  true,
-		ArtifactIsBuiltIn: true})
-	assert.NoError(self.T(), err)
+	self.seedClient(config_obj, client_id)
 
 	acl_manager := acl_managers.NullACLManager{}
 	flow_id, err := launcher.ScheduleArtifactCollection(
@@ -181,6 +173,82 @@ sources:
 
 	// Make sure the latest flow is first
 	assert.Equal(self.T(), "F.1234second", flows.Items[0].SessionId)
+}
+
+// The server is a pseudo client with no record in the index - collections
+// against it must still be scheduled.
+func (self *LauncherTestSuite) TestScheduleServerCollection() {
+	config_obj := self.ConfigObj.VeloConf()
+
+	launcher, err := services.GetLauncher(config_obj)
+	assert.NoError(self.T(), err)
+
+	closer := utils.SetFlowIdForTests("F.server")
+	defer closer()
+
+	repository := self.loadTestArtifact(config_obj)
+
+	flow_id, err := launcher.ScheduleArtifactCollection(
+		self.Ctx, config_obj, acl_managers.NullACLManager{},
+		repository, &flows_proto.ArtifactCollectorArgs{
+			ClientId:  "server",
+			Artifacts: []string{"TestArtifact"},
+		}, nil)
+	assert.NoError(self.T(), err)
+	assert.Equal(self.T(), "F.server", flow_id)
+}
+
+// A client id that is well formed but has no record must still be refused,
+// and the error must remain recognisable as a not found error.
+func (self *LauncherTestSuite) TestScheduleUnknownClientRefused() {
+	config_obj := self.ConfigObj.VeloConf()
+
+	launcher, err := services.GetLauncher(config_obj)
+	assert.NoError(self.T(), err)
+
+	closer := utils.SetFlowIdForTests("F.unknown")
+	defer closer()
+
+	repository := self.loadTestArtifact(config_obj)
+
+	_, err = launcher.ScheduleArtifactCollection(
+		self.Ctx, config_obj, acl_managers.NullACLManager{},
+		repository, &flows_proto.ArtifactCollectorArgs{
+			ClientId:  "C.deadbeef",
+			Artifacts: []string{"TestArtifact"},
+		}, nil)
+	assert.Error(self.T(), err)
+	assert.True(self.T(), utils.IsNotFound(err))
+}
+
+func (self *LauncherTestSuite) loadTestArtifact(
+	config_obj *config_proto.Config) services.Repository {
+
+	repository_manager, err := services.GetRepositoryManager(config_obj)
+	assert.NoError(self.T(), err)
+
+	repository := repository_manager.NewRepository()
+	_, err = repository.LoadYaml(`
+name: TestArtifact
+sources:
+- query: SELECT * FROM info()
+`, services.ArtifactOptions{
+		ValidateArtifact:  true,
+		ArtifactIsBuiltIn: true})
+	assert.NoError(self.T(), err)
+
+	return repository
+}
+
+func (self *LauncherTestSuite) seedClient(
+	config_obj *config_proto.Config, client_id string) {
+
+	client_info_manager, err := services.GetClientInfoManager(config_obj)
+	assert.NoError(self.T(), err)
+
+	err = client_info_manager.Set(self.Ctx, &services.ClientInfo{
+		ClientInfo: &actions_proto.ClientInfo{ClientId: client_id}})
+	assert.NoError(self.T(), err)
 }
 
 func TestLauncher(t *testing.T) {

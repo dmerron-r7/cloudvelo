@@ -90,6 +90,16 @@ func (self ResultSetFactory) NewResultSetWriter(
 	}, nil
 }
 
+// Result sets live in the Elastic "transient" index, not in the
+// filestore. cloudvelo's own FlowStorageManager.DeleteFlow() removes them
+// with a delete-by-query, so this filestore based entry point is never
+// used here.
+func (self ResultSetFactory) DeleteResultSet(
+	file_store_factory api.FileStore,
+	path api.FSPathSpec) error {
+	return utils.NotImplementedError
+}
+
 func (self ResultSetFactory) NewResultSetReader(
 	file_store_factory api.FileStore,
 	log_path api.FSPathSpec) (result_sets.ResultSetReader, error) {

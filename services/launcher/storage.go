@@ -291,7 +291,7 @@ func (self *FlowStorageManager) LoadCollectionContext(
 		}
 	}
 
-	return nil, utils.NotFoundError
+	return self.LoadCollectionContextSlow(ctx, config_obj, client_id, flow_id)
 }
 
 // The old slow version of LoadCollectionContext.
@@ -332,7 +332,7 @@ func (self *FlowStorageManager) LoadCollectionContextSlow(
 		collection_context = mergeRecords(collection_context, stats_context)
 	}
 	if collection_context == nil {
-		return nil, errors.New("Not found")
+		return nil, utils.NotFoundError
 	}
 	launcher.UpdateFlowStats(collection_context)
 

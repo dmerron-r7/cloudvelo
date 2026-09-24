@@ -449,9 +449,7 @@ func (self *LauncherTestSuite) seedClient(
 
 func TestLauncher(t *testing.T) {
 	suite.Run(t, &LauncherTestSuite{
-		CloudTestSuite: &testsuite.CloudTestSuite{
-			Indexes: []string{"persisted", "transient"},
-		},
+		CloudTestSuite: &testsuite.CloudTestSuite{},
 	})
 }
 

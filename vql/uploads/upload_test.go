@@ -411,8 +411,7 @@ func (self *UploaderTestSuite) checkForKey(filter string) []string {
 func TestUploader(t *testing.T) {
 	suite.Run(t, &UploaderTestSuite{
 		CloudTestSuite: &testsuite.CloudTestSuite{
-			Indexes: []string{"persisted"},
-			OrgId:   "test",
+			OrgId: "test",
 		},
 		golden: ordereddict.NewDict(),
 	})

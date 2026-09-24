@@ -10,6 +10,7 @@ import (
 
 	"www.velocidex.com/golang/cloudvelo/schema/api"
 	cvelo_services "www.velocidex.com/golang/cloudvelo/services"
+	"www.velocidex.com/golang/cloudvelo/services/indexing"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
 	"www.velocidex.com/golang/velociraptor/json"
 	"www.velocidex.com/golang/velociraptor/services"
@@ -99,6 +100,7 @@ func (self Labeler) SetClientLabel(
 		json.Format(label_update_query, all_label_painless, label,
 			time.Now().UnixNano(), strings.ToLower(label)))
 	if err == nil {
+		self.invalidateClientCache(client_id)
 		return nil
 	}
 
@@ -106,7 +108,7 @@ func (self Labeler) SetClientLabel(
 		return err
 	}
 
-	return cvelo_services.SetElasticIndex(ctx,
+	err = cvelo_services.SetElasticIndex(ctx,
 		self.config_obj.OrgId,
 		"persisted", client_id+"_labels",
 		api.ClientRecord{
@@ -117,6 +119,12 @@ func (self Labeler) SetClientLabel(
 			DocType:            "clients",
 			Timestamp:          uint64(utils.GetTime().Now().Unix()),
 		})
+	if err != nil {
+		return err
+	}
+
+	self.invalidateClientCache(client_id)
+	return nil
 }
 
 const (
@@ -139,10 +147,31 @@ func (self Labeler) RemoveClientLabel(
 
 	label = strings.TrimSpace(label)
 
-	return cvelo_services.UpdateIndex(ctx, self.config_obj.OrgId,
+	err := cvelo_services.UpdateIndex(ctx, self.config_obj.OrgId,
 		"persisted", client_id+"_labels",
 		json.Format(label_update_query, remove_label_painless, label,
 			time.Now().UnixNano(), strings.ToLower(label)))
+	if err != nil {
+		return err
+	}
+
+	self.invalidateClientCache(client_id)
+	return nil
+}
+
+// Labels are read back through the indexer's client record cache, which a
+// direct index write does not touch. Evict the client's entry so the next
+// read reflects the label we just wrote.
+func (self Labeler) invalidateClientCache(client_id string) {
+	indexer, err := services.GetIndexer(self.config_obj)
+	if err != nil {
+		return
+	}
+
+	cvelo_indexer, ok := indexer.(*indexing.Indexer)
+	if ok {
+		cvelo_indexer.InvalidateCache(client_id)
+	}
 }
 
 // Gets all the labels in a client.

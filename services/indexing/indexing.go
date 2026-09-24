@@ -192,6 +192,13 @@ func (self Indexer) FastGetApiClient(
 	return _makeApiClient(records[0]), nil
 }
 
+// Evict the cached client record so the next FastGetApiClient re-reads
+// it from the index. Callers that write a client document directly must
+// call this or reads stay stale until the TTL expires.
+func (self Indexer) InvalidateCache(client_id string) {
+	_ = self.lru.Remove(client_id)
+}
+
 func _makeApiClient(client_info *cvelo_api.ClientRecord) *api_proto.ApiClient {
 	fqdn := client_info.Hostname
 	return &api_proto.ApiClient{

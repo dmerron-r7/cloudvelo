@@ -61,7 +61,7 @@ jobs:
       shell: bash
       run: |
         mkdir -p artifact_output/
-        go test -v ./vql/uploads/ ./foreman/ ./ingestion/ -update
+        go test -v -p 1 ./vql/uploads/ ./foreman/ ./ingestion/ -update
         cp -a ./vql/uploads/fixtures/* ./foreman/fixtures/* ./ingestion/fixtures/* artifact_output/
 
     - uses: actions/upload-artifact@master

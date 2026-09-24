@@ -178,8 +178,6 @@ func (self *ClientInfoTestSuite) waitForLabels(
 
 func TestClientInfo(t *testing.T) {
 	suite.Run(t, &ClientInfoTestSuite{
-		CloudTestSuite: &testsuite.CloudTestSuite{
-			Indexes: []string{"persisted"},
-		},
+		CloudTestSuite: &testsuite.CloudTestSuite{},
 	})
 }

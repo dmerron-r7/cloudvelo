@@ -170,6 +170,8 @@ func (self ClientInfoBase) Get(
 		LastHuntTimestamp:     client_info.LastHuntTimestamp,
 		LastEventTableVersion: client_info.LastEventTableVersion,
 		BuildTime:             client_info.AgentInformation.BuildTime,
+		Labels:                client_info.Labels,
+		LastInterrogateFlowId: client_info.LastInterrogateFlowId,
 	}}, nil
 }
 

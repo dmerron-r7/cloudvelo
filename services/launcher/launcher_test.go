@@ -12,6 +12,7 @@ import (
 	cvelo_api "www.velocidex.com/golang/cloudvelo/schema/api"
 	cvelo_services "www.velocidex.com/golang/cloudvelo/services"
 	"www.velocidex.com/golang/cloudvelo/services/client_info"
+	cvelo_launcher "www.velocidex.com/golang/cloudvelo/services/launcher"
 	"www.velocidex.com/golang/cloudvelo/testsuite"
 	actions_proto "www.velocidex.com/golang/velociraptor/actions/proto"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
@@ -279,6 +280,129 @@ func (self *LauncherTestSuite) TestLoadCollectionContextUnknownFlowIsNotFound() 
 		self.Ctx, config_obj, "C.noflows", "F.doesnotexist")
 	assert.Error(self.T(), err)
 	assert.True(self.T(), utils.IsNotFound(err))
+}
+
+// A flow cached while it was still running must not keep being served in
+// that state. Completion is written by whichever process observes it -
+// ingestion, or another replica - and the snapshot is held per process
+// with no cross instance invalidation, so an instance holding a warm
+// entry has to re-read rather than trust it.
+//
+// This is the ticket's evidence shape: two instances, one flow, one
+// moment, and they disagreed for longer than the cache TTL.
+func (self *LauncherTestSuite) TestLoadCollectionContextRefreshesNonTerminalFlow() {
+	config_obj := self.ConfigObj.VeloConf()
+	client_id := "C.staleflow"
+	flow_id := "F.stalerunning"
+
+	self.seedClient(config_obj, client_id)
+
+	// Two launcher services stand in for the server and vql-launcher
+	// replicas: same OpenSearch, same filestore, independent snapshots.
+	warmed := self.newLauncherInstance()
+	cold := self.newLauncherInstance()
+
+	self.seedCollectionRecord(config_obj, runningFlow(client_id, flow_id))
+
+	// Warm one instance's snapshot while the collection is still running.
+	self.assertFlowState(warmed, client_id, flow_id,
+		flows_proto.ArtifactCollectorContext_RUNNING)
+
+	// The completion lands in the datastore from elsewhere. Nothing
+	// invalidates the snapshot that is now holding a superseded state.
+	self.seedCollectionRecord(config_obj, completedFlow(client_id, flow_id))
+
+	// Neither instance may report the collection as still running, and
+	// they have to agree with each other.
+	self.assertFlowState(warmed, client_id, flow_id,
+		flows_proto.ArtifactCollectorContext_FINISHED)
+	self.assertFlowState(cold, client_id, flow_id,
+		flows_proto.ArtifactCollectorContext_FINISHED)
+}
+
+// The counterpart to the above: a collection that can no longer change
+// still has to be served from the snapshot rather than re-queried. That is
+// what keeps GetFlowDetails cheap while the GUI polls it once a second, so
+// pin it - a later "just always re-read" simplification would undo the
+// whole point of the cache without failing any other test.
+//
+// The two reads returning the same object is the assertion: the datastore
+// path builds a fresh context every call, so only the snapshot can hand
+// back the identical pointer.
+func (self *LauncherTestSuite) TestLoadCollectionContextServesTerminalFlowFromSnapshot() {
+	config_obj := self.ConfigObj.VeloConf()
+	client_id := "C.terminalflow"
+	flow_id := "F.alreadyfinished"
+
+	self.seedClient(config_obj, client_id)
+
+	instance := self.newLauncherInstance()
+
+	self.seedCollectionRecord(config_obj, completedFlow(client_id, flow_id))
+
+	first, err := instance.Storage().LoadCollectionContext(
+		self.Ctx, config_obj, client_id, flow_id)
+	assert.NoError(self.T(), err)
+	assert.Equal(self.T(),
+		flows_proto.ArtifactCollectorContext_FINISHED, first.State)
+
+	second, err := instance.Storage().LoadCollectionContext(
+		self.Ctx, config_obj, client_id, flow_id)
+	assert.NoError(self.T(), err)
+	assert.True(self.T(), first == second)
+}
+
+// Each launcher service builds its own flow snapshot, which is what makes
+// a second one a usable stand-in for a second replica.
+func (self *LauncherTestSuite) newLauncherInstance() services.Launcher {
+	instance, err := cvelo_launcher.NewLauncherService(
+		self.Ctx, self.Sm.Wg, self.ConfigObj.VeloConf(),
+		&self.ConfigObj.Cloud)
+	assert.NoError(self.T(), err)
+
+	return instance
+}
+
+func (self *LauncherTestSuite) assertFlowState(
+	instance services.Launcher, client_id, flow_id string,
+	expected flows_proto.ArtifactCollectorContext_State) {
+
+	collection_context, err := instance.Storage().LoadCollectionContext(
+		self.Ctx, self.ConfigObj.VeloConf(), client_id, flow_id)
+	assert.NoError(self.T(), err)
+	assert.Equal(self.T(), expected, collection_context.State)
+}
+
+// One query still reporting progress, so UpdateFlowStats leaves the
+// collection RUNNING with an outstanding request.
+func runningFlow(
+	client_id, flow_id string) *flows_proto.ArtifactCollectorContext {
+	return &flows_proto.ArtifactCollectorContext{
+		ClientId:  client_id,
+		SessionId: flow_id,
+		Request: &flows_proto.ArtifactCollectorArgs{
+			Artifacts: []string{"TestArtifact"},
+			Creator:   "admin",
+		},
+		QueryStats: []*crypto_proto.VeloStatus{{
+			Status: crypto_proto.VeloStatus_PROGRESS,
+		}},
+	}
+}
+
+// The completion record, as the ingestion path writes it once the client
+// reports the query done. mergeRecords lets these query stats replace the
+// progress ones, and UpdateFlowStats then derives FINISHED.
+func completedFlow(
+	client_id, flow_id string) *flows_proto.ArtifactCollectorContext {
+	return &flows_proto.ArtifactCollectorContext{
+		ClientId:  client_id,
+		SessionId: flow_id,
+		QueryStats: []*crypto_proto.VeloStatus{{
+			Status:     crypto_proto.VeloStatus_OK,
+			ResultRows: 77,
+		}},
+	}
 }
 
 func (self *LauncherTestSuite) assertFlowReadableAfterCacheWarmed(

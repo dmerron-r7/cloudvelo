@@ -278,20 +278,37 @@ func (self *FlowStorageManager) LoadCollectionContext(
 		// Try to get it again from the cache. Should be there this
 		// time.
 		flows_any, err = self.cache.Get(client_id)
-
-	} else {
-		cvelo_services.Count("LoadCollectionContext (Cached)")
 	}
 
 	flows, ok := flows_any.(*FlowCacheItem)
 	if ok {
-		hit, ok := flows.Get(flow_id)
-		if ok {
+		hit, pres := flows.Get(flow_id)
+
+		// Only a flow that can no longer change may be served from the
+		// snapshot. The snapshot is a point in time copy held per
+		// process, the state a flow ends in is written by whichever
+		// process observes the completion, and nothing invalidates the
+		// snapshot across processes - so a non terminal entry may
+		// already be wrong and has to be re-read.
+		if pres && isTerminalFlowState(hit.State) {
+			cvelo_services.Count("LoadCollectionContext (Cached)")
 			return hit, nil
 		}
 	}
 
 	return self.LoadCollectionContextSlow(ctx, config_obj, client_id, flow_id)
+}
+
+// FINISHED and ERROR are the only states a collection does not leave.
+// mergeRecords never replaces a completed QueryStats with a running one,
+// and UpdateFlowStats derives the state from those stats, so neither can
+// be walked back. Every other state - UNSET, RUNNING, WAITING,
+// IN_PROGRESS and UNRESPONSIVE - is still expected to change, and
+// UNRESPONSIVE is derived from the clock rather than stored at all.
+func isTerminalFlowState(
+	state flows_proto.ArtifactCollectorContext_State) bool {
+	return state == flows_proto.ArtifactCollectorContext_FINISHED ||
+		state == flows_proto.ArtifactCollectorContext_ERROR
 }
 
 // The old slow version of LoadCollectionContext.

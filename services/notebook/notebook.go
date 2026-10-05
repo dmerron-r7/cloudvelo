@@ -38,5 +38,13 @@ func NewNotebookManagerService(
 	// implement (services/orgs/lazy.go:65) because cloud notebooks are
 	// already durable in Elastic and S3. Registering a provider with no
 	// service to collect it would only add a dead error path.
+	//
+	// Calling NewNotebookManager rather than upstream's
+	// NewNotebookManagerService also skips the Start() that upstream
+	// returns alongside the service, so its root-org guard and
+	// NotebookNumberOfLocalWorkers handling never run; the pool is
+	// started instead in startup/gui.go. Anything upstream adds to
+	// Start() will not take effect here. Only the backup omission above
+	// has been reviewed and decided.
 	return notebook_service
 }

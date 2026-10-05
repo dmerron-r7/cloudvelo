@@ -309,6 +309,12 @@ func (self *VeloCloudUploader) Start(ctx context.Context) error {
 	self.key = upload_response.Key
 	self.upload_id = upload_response.UploadId
 
+	// Upstream pairs this id with an UploadTransaction message so a
+	// restarted client can resume a part-finished upload. Resuming an S3
+	// multipart upload would need the server-held upload id and part
+	// list, which /start does not republish, and nothing in cloudvelo
+	// ingests a transaction anyway. The id is kept only to order this
+	// flow's upload rows.
 	self.upload_number = self.Responder.NextUploadId()
 
 	return nil

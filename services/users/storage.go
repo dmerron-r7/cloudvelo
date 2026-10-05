@@ -196,6 +196,11 @@ func (self *UserStorageManager) SetUserOptions(ctx context.Context,
 		old_options.Lang = options.Lang
 	}
 
+	// Upstream screens the theme and language against an unexported
+	// whitelist that grows every time it ships a new one. These values
+	// only ever reach an html/template-escaped body class and a GUI that
+	// matches on known names, so an unrecognised one costs the user who
+	// sent it a plain stylesheet and nothing the server relies on.
 	if options.Theme != "" {
 		old_options.Theme = options.Theme
 	}
@@ -279,6 +284,12 @@ func (self *UserStorageManager) GetUserOptions(ctx context.Context, username str
 	err = protojson.Unmarshal(
 		[]byte(user_record.GUIOptions), result)
 
+	// Upstream rebuilds this whole block from the config file's Defaults
+	// section on every read, so the GUI learns the deployment's hunt
+	// expiry, quarantine and indexed-metadata choices. cloudvelo is
+	// multi-tenant and carries no per-deployment Defaults to read, so
+	// only the one setting that is genuinely fixed here is forced and
+	// the GUI is left to supply its own fallbacks.
 	if result.Customizations == nil {
 		result.Customizations = &api_proto.GUICustomizations{}
 	}

@@ -20,6 +20,12 @@ import (
 // Uploads are being sent separately to the server handler by the
 // client. The FileBuffer message only sends metadata about the
 // upload.
+//
+// Upstream's ClientFlowRunner also consumes UploadTransaction
+// messages alongside these FileBuffers so a part-finished upload can
+// be resumed. cloudvelo has no ClientFlowRunner and nothing writes the
+// UploadTransactions result set, so only the terminal FileBuffer is
+// recorded and an interrupted upload restarts from the beginning.
 func (self Ingestor) HandleUploads(
 	ctx context.Context,
 	config_obj *config_proto.Config,

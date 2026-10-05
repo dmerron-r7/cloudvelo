@@ -12,7 +12,11 @@ import (
 )
 
 // This service checks the running server environment for sane
-// conditions.
+// conditions. It deliberately runs only org and user bootstrap:
+// upstream's remaining checks report their findings through the
+// frontend manager's global messages, and cloudvelo's FrontendService
+// implements that as a no-op (services/frontend/frontend.go:37), so
+// running them here would produce findings nobody can see.
 type SanityChecks struct{}
 
 // Check sanity of general server state - this is only done for the root org.
@@ -43,6 +47,12 @@ func (self *SanityChecks) CheckRootOrg(
 		}
 	}
 
+	// Upstream also normalises an unset Datastore.compression to "zlib"
+	// here, which makes the launcher ask clients to compress VQL rows. A
+	// compressing client blanks JSONLResponse and fills
+	// CompressedJsonResponse instead, but every cloudvelo ingestion path
+	// reads JSONLResponse directly - so adopting that check would make
+	// every collection succeed and return zero rows.
 	return nil
 }
 

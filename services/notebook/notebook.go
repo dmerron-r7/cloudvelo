@@ -32,5 +32,11 @@ func NewNotebookManagerService(
 		timeline_storer, &SuperTimelineReader{}, &SuperTimelineWriter{},
 		annotator, notebook.NewAttachmentManager(config_obj, store))
 
+	// Upstream's own constructor registers a NotebookBackupProvider here
+	// so notebooks land in the server backup archive. That archive is
+	// produced by the BackupService, which LazyServiceContainer does not
+	// implement (services/orgs/lazy.go:65) because cloud notebooks are
+	// already durable in Elastic and S3. Registering a provider with no
+	// service to collect it would only add a dead error path.
 	return notebook_service
 }

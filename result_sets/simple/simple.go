@@ -1,6 +1,7 @@
 package simple
 
 import (
+	cvelo_services "www.velocidex.com/golang/cloudvelo/services"
 	"www.velocidex.com/golang/velociraptor/file_store/api"
 )
 
@@ -36,3 +37,11 @@ func NewSimpleResultSetRecord(
 		ID:      id,
 	}
 }
+
+// Elastic operations used by the writer. These are variables so
+// tests can inject failures.
+var (
+	setElasticIndex      = cvelo_services.SetElasticIndex
+	setElasticIndexAsync = cvelo_services.SetElasticIndexAsync
+	flushIndex           = cvelo_services.FlushIndex
+)

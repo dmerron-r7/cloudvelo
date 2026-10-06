@@ -9,8 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	cvelo_services "www.velocidex.com/golang/cloudvelo/services"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
+	"www.velocidex.com/golang/velociraptor/file_store/api"
 	"www.velocidex.com/golang/velociraptor/file_store/path_specs"
 	"www.velocidex.com/golang/velociraptor/json"
+	"www.velocidex.com/golang/velociraptor/result_sets"
 )
 
 // fakeElastic records documents written by the writer and can be
@@ -52,17 +54,32 @@ func (self *fakeElastic) lastMD() ResultSetMetadataRecord {
 	return self.md[len(self.md)-1]
 }
 
+// Like GetResultSetMetadata, returns the newest metadata record or an
+// empty legacy record if there is none.
+func (self *fakeElastic) getResultSetMetadata(ctx context.Context,
+	config_obj *config_proto.Config,
+	log_path api.FSPathSpec) (*ResultSetMetadataRecord, error) {
+	if len(self.md) == 0 {
+		return &ResultSetMetadataRecord{Type: "rs_metadata"}, nil
+	}
+	md := self.lastMD()
+	return &md, nil
+}
+
 func installFakeElastic(t *testing.T) *fakeElastic {
 	fake := &fakeElastic{}
 
-	old_set, old_async, old_flush := setElasticIndex, setElasticIndexAsync, flushIndex
+	old_set, old_async, old_flush, old_get := setElasticIndex,
+		setElasticIndexAsync, flushIndex, getResultSetMetadata
 	setElasticIndex = fake.setElasticIndex
 	setElasticIndexAsync = fake.setElasticIndexAsync
 	flushIndex = func(ctx context.Context, org_id, index string) error {
 		return nil
 	}
+	getResultSetMetadata = fake.getResultSetMetadata
 	t.Cleanup(func() {
-		setElasticIndex, setElasticIndexAsync, flushIndex = old_set, old_async, old_flush
+		setElasticIndex, setElasticIndexAsync, flushIndex,
+			getResultSetMetadata = old_set, old_async, old_flush, old_get
 	})
 
 	return fake
@@ -143,4 +160,84 @@ func TestFlushAdvancesRows(t *testing.T) {
 	assert.Equal(t, int64(2), fake.rows[0].EndRow)
 	assert.Equal(t, int64(2), fake.lastMD().EndRow)
 	assert.Equal(t, int64(0), fake.lastMD().TotalRows)
+}
+
+var testLogPath = path_specs.NewSafeFilestorePath("clients", "C.1", "F.1")
+
+// Opens a writer the way NewResultSetWriter does, starting a new
+// version called new_id if the existing one can not be continued.
+func openTestWriter(t *testing.T, sync bool,
+	mode result_sets.WriteMode, new_id string) *ElasticSimpleResultSetWriter {
+	md, err := openWriterMetadata(context.Background(),
+		&config_proto.Config{}, testLogPath, mode,
+		&ResultSetMetadataRecord{ID: new_id, Type: "rs_metadata"})
+	assert.NoError(t, err)
+
+	writer := newTestWriter(sync)
+	writer.md = md
+	writer.version = md.ID
+	writer.start_row = md.EndRow
+	return writer
+}
+
+func TestAppendContinuesExistingResultSet(t *testing.T) {
+	fake := installFakeElastic(t)
+	fake.md = []ResultSetMetadataRecord{{ID: "v1", EndRow: 2}}
+
+	writer := openTestWriter(t, true, result_sets.AppendMode, "v2")
+	assert.Equal(t, "v1", writer.version)
+	assert.Equal(t, int64(2), writer.start_row)
+
+	// The existing record is reused, not rewritten.
+	assert.Equal(t, 1, len(fake.md))
+}
+
+func TestAppendAfterAbortStartsNewVersion(t *testing.T) {
+	fake := installFakeElastic(t)
+	fake.md = []ResultSetMetadataRecord{{ID: "v1", EndRow: -1, TotalRows: -1}}
+
+	writer := openTestWriter(t, true, result_sets.AppendMode, "v2")
+	assert.Equal(t, "v2", writer.version)
+	assert.Equal(t, int64(0), writer.start_row)
+
+	assert.Equal(t, 2, len(fake.md))
+	assert.Equal(t, "v2", fake.lastMD().ID)
+	assert.Equal(t, int64(0), fake.lastMD().TotalRows)
+}
+
+func TestClientLogRecoversAfterWriteError(t *testing.T) {
+	fake := installFakeElastic(t)
+
+	// A log batch fails to write so the result set is aborted.
+	fake.fail_rs = true
+	writer := openTestWriter(t, true, result_sets.AppendMode, "v1")
+	writer.WriteJSONL([]byte("{\"A\":1}\n"), 1)
+	writer.Close()
+	assert.Equal(t, int64(-1), fake.lastMD().TotalRows)
+
+	// The next batch for the same flow is written successfully and
+	// the result set can be read again (readers refuse TotalRows < 0).
+	fake.fail_rs = false
+	writer = openTestWriter(t, true, result_sets.AppendMode, "v2")
+	writer.WriteJSONL([]byte("{\"A\":2}\n{\"A\":3}\n"), 2)
+	writer.Close()
+
+	assert.Equal(t, 1, len(fake.rows))
+	assert.Equal(t, "v2", fake.rows[0].ID)
+	assert.Equal(t, int64(0), fake.rows[0].StartRow)
+	assert.Equal(t, int64(2), fake.rows[0].EndRow)
+
+	md := fake.lastMD()
+	assert.Equal(t, "v2", md.ID)
+	assert.Equal(t, int64(2), md.EndRow)
+	assert.Equal(t, int64(0), md.TotalRows)
+
+	// Later batches keep appending to the recovered version.
+	writer = openTestWriter(t, true, result_sets.AppendMode, "v3")
+	writer.WriteJSONL([]byte("{\"A\":4}\n"), 1)
+	writer.Close()
+
+	assert.Equal(t, "v2", fake.rows[1].ID)
+	assert.Equal(t, int64(2), fake.rows[1].StartRow)
+	assert.Equal(t, int64(3), fake.lastMD().EndRow)
 }

@@ -38,10 +38,11 @@ func NewSimpleResultSetRecord(
 	}
 }
 
-// Elastic operations used by the writer. These are variables so
-// tests can inject failures.
+// Elastic operations used by the writer and its factory. These are
+// variables so tests can inject failures.
 var (
 	setElasticIndex      = cvelo_services.SetElasticIndex
 	setElasticIndexAsync = cvelo_services.SetElasticIndexAsync
 	flushIndex           = cvelo_services.FlushIndex
+	getResultSetMetadata = GetResultSetMetadata
 )

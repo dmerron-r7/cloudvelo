@@ -26,6 +26,11 @@ func (self *HuntStorageManagerImpl) ListHunts(
 	options result_sets.ResultSetOptions,
 	offset int64, length int64) ([]*api_proto.Hunt, int64, error) {
 
+	// Rebuild the index from Elastic on every listing. Upstream keeps
+	// an in-memory hunt map and only re-flushes when that map is newer
+	// than the index file; this store has no such map and any frontend
+	// may write hunts, so querying Elastic is the only source of
+	// freshness.
 	err := self.FlushIndex(ctx)
 	if err != nil {
 		return nil, 0, err

@@ -242,5 +242,9 @@ func NewHuntDispatcher(
 	}
 	service.HuntDispatcher.Store = NewHuntStorageManagerImpl(ctx, config_obj)
 
+	// StartRefresh is deliberately not called: the Elastic store's
+	// Refresh is not implemented, the foreman enforces hunt expiry, and
+	// updates sent to Server.Internal.HuntUpdate are not consumed here.
+	// Upstream's checkForExpiry and ProcessUpdate therefore never run.
 	return service, nil
 }

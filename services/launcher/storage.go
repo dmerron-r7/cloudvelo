@@ -70,6 +70,11 @@ func NewFlowCacheItem() *FlowCacheItem {
 }
 
 type FlowStorageManager struct {
+	// Embedded zero valued: upstream's constructor never runs, so its
+	// index builders, throttler and journal do not exist and every
+	// FlowStorer method that needs them is overridden here. WriteFlowStats
+	// still falls through to the datastore; nothing here reads it back,
+	// since resumable uploads are not supported.
 	launcher.FlowStorageManager
 
 	// client_id -> FlowCacheItem : map[flow_id]*flows_proto.ArtifactCollectorContext

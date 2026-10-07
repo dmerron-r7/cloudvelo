@@ -20,9 +20,10 @@ import (
 
 // Upstream deletes a flow by walking the filestore and datastore paths
 // that make it up. cloudvelo stores flows as Elastic documents with no
-// directory structure to walk, so deletion is a set of delete-by-query
-// calls against the indexes holding them. This shadows the embedded
-// launcher.FlowStorageManager.DeleteFlow, which is unreachable here.
+// directory structure to walk, so the flow's documents are removed with
+// delete-by-query calls against the indexes holding them. This shadows
+// the embedded launcher.FlowStorageManager.DeleteFlow, which is
+// unreachable here.
 func (self *FlowStorageManager) DeleteFlow(
 	ctx context.Context,
 	config_obj *config_proto.Config,

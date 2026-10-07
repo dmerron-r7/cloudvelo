@@ -61,7 +61,11 @@ type ClientTask struct {
 	DocType   string `json:"doc_type"`
 }
 
-// Get the client's tasks and remove them from the queue.
+// Get the client's tasks and remove them from the queue. Upstream also
+// keeps a set of in-flight flows on the client record and re-checks
+// flows idle past inflight_check_time. cloudvelo keeps no in-flight
+// set on the client record, so inflight_check_time and
+// disable_active_inflight_checks have no effect on this path.
 func (self ClientInfoBase) GetClientTasks(
 	ctx context.Context, client_id string) ([]*crypto_proto.VeloMessage, error) {
 

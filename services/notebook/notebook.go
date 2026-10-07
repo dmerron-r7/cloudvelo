@@ -35,9 +35,9 @@ func NewNotebookManagerService(
 	// Upstream's own constructor registers a NotebookBackupProvider here
 	// so notebooks land in the server backup archive. That archive is
 	// produced by the BackupService, which LazyServiceContainer does not
-	// implement (services/orgs/lazy.go:65) because cloud notebooks are
-	// already durable in Elastic and S3. Registering a provider with no
-	// service to collect it would only add a dead error path.
+	// implement because cloud notebooks are already durable in Elastic
+	// and S3. Registering a provider with no service to collect it would
+	// only add a dead error path.
 	//
 	// Calling NewNotebookManager rather than upstream's
 	// NewNotebookManagerService also skips the Start() that upstream

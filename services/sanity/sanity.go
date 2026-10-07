@@ -14,9 +14,9 @@ import (
 // This service checks the running server environment for sane
 // conditions. It deliberately runs only org and user bootstrap:
 // upstream's remaining checks report their findings through the
-// frontend manager's global messages, and cloudvelo's FrontendService
-// implements that as a no-op (services/frontend/frontend.go:37), so
-// running them here would produce findings nobody can see.
+// frontend manager's global messages, and cloudvelo's
+// FrontendService.SetGlobalMessage is a no-op, so running them here
+// would produce findings nobody can see.
 type SanityChecks struct{}
 
 // Check sanity of general server state - this is only done for the root org.

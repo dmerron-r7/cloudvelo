@@ -180,6 +180,12 @@ const getLatestFlowRecord = `
 
 // We only need to rebuild the index if the latest flow document is
 // newer than the index.
+//
+// Upstream rebuilds the flow index from per flow datastore files once
+// it is older than Defaults.reindex_period_seconds, one rebuild at a
+// time. Collections live in OpenSearch here, so the index is rebuilt
+// when the newest collection document postdates it, rate limited by
+// Cloud.min_flow_cache_time_min; reindex_period_seconds is ignored.
 func (self *FlowStorageManager) shouldRebuildIndex(
 	ctx context.Context, config_obj *config_proto.Config,
 	client_id string,

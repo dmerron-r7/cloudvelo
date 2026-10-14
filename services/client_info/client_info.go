@@ -102,6 +102,18 @@ func (self *ClientInfoBase) Set(
 
 	cvelo_services.Count("SetClient")
 
+	// An empty client id would index a main record under a random
+	// document id. Validate through the org's client info manager.
+	client_info_manager, err := services.GetClientInfoManager(self.config_obj)
+	if err != nil {
+		return err
+	}
+
+	err = client_info_manager.ValidateClientId(client_info.ClientId)
+	if err != nil {
+		return err
+	}
+
 	now := utils.GetTime().Now().Unix()
 
 	return cvelo_services.SetElasticIndex(ctx,

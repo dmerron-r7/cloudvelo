@@ -1,4 +1,4 @@
-package startup
+package security
 
 import (
 	"runtime"
@@ -21,10 +21,10 @@ var default_denied_fs_accessor_prefix = []string{
 	"users",
 }
 
-// ApplySecuritySettings builds the file and fs accessor prefix trees
+// Apply builds the file and fs accessor prefix trees
 // and the shadowed environment variables from the Security config
 // block. Upstream does this in the sanity service, which we do not run.
-func ApplySecuritySettings(config_obj *config_proto.Config) error {
+func Apply(config_obj *config_proto.Config) error {
 	security := config_obj.Security
 	if security == nil {
 		security = &config_proto.Security{}

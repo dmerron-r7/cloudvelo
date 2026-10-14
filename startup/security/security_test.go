@@ -1,11 +1,11 @@
-package startup_test
+package security_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert"
-	"www.velocidex.com/golang/cloudvelo/startup"
+	"www.velocidex.com/golang/cloudvelo/startup/security"
 	"www.velocidex.com/golang/velociraptor/accessors/file"
 	"www.velocidex.com/golang/velociraptor/accessors/file_store"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
@@ -70,7 +70,7 @@ func TestShadowedEnvVarsAddedOnce(t *testing.T) {
 		ShadowedEnvVars: []string{"SECRET_ONE", "SECRET_TWO"},
 	}}
 	apply(t, config_obj.Security)
-	assert.NoError(t, startup.ApplySecuritySettings(config_obj))
+	assert.NoError(t, security.Apply(config_obj))
 
 	for _, name := range []string{"SECRET_ONE", "SECRET_TWO"} {
 		count := 0
@@ -95,7 +95,7 @@ func TestHostedFsAllowList(t *testing.T) {
 	assertFsDenied(t, "/server_artifacts/x")
 }
 
-func apply(t *testing.T, security *config_proto.Security) {
+func apply(t *testing.T, security_block *config_proto.Security) {
 	shadowed := append([]string{}, common.ShadowedEnv...)
 	t.Cleanup(func() {
 		file.SetPrefixes(nil, nil)
@@ -103,8 +103,8 @@ func apply(t *testing.T, security *config_proto.Security) {
 		common.ShadowedEnv = shadowed
 	})
 
-	assert.NoError(t, startup.ApplySecuritySettings(
-		&config_proto.Config{Security: security}))
+	assert.NoError(t, security.Apply(
+		&config_proto.Config{Security: security_block}))
 }
 
 func fsPath(path string) []string {

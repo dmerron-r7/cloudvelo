@@ -7,6 +7,7 @@ import (
 	"www.velocidex.com/golang/cloudvelo/services/orgs"
 	"www.velocidex.com/golang/cloudvelo/services/sanity"
 	"www.velocidex.com/golang/cloudvelo/services/scheduler"
+	"www.velocidex.com/golang/cloudvelo/startup/security"
 	"www.velocidex.com/golang/velociraptor/accessors"
 	file_store_accessor "www.velocidex.com/golang/velociraptor/accessors/file_store"
 	"www.velocidex.com/golang/velociraptor/api"
@@ -71,7 +72,7 @@ func StartGUIServices(
 		return sm, err
 	}
 
-	err = ApplySecuritySettings(config_obj.VeloConf())
+	err = security.Apply(config_obj.VeloConf())
 	if err != nil {
 		return sm, err
 	}

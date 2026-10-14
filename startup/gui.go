@@ -71,6 +71,11 @@ func StartGUIServices(
 		return sm, err
 	}
 
+	err = ApplySecuritySettings(config_obj.VeloConf())
+	if err != nil {
+		return sm, err
+	}
+
 	// Register the "fs" accessor for accessing the filestore in VQL
 	fs_factory := file_store_accessor.NewFileStoreFileSystemAccessor(
 		config_obj.VeloConf())

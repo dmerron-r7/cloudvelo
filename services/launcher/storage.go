@@ -151,7 +151,9 @@ func (self *FlowStorageManager) ListFlows(
 	cache_item := NewFlowCacheItem()
 	for _, i := range flows {
 		res = append(res, i.Summary())
-		cache_item.Set(i.FlowId, i.Flow)
+		if i.Flow != nil {
+			cache_item.Set(i.FlowId, i.Flow)
+		}
 	}
 	self.cache.Set(client_id, cache_item)
 

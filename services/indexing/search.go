@@ -90,7 +90,7 @@ func (self *Indexer) searchRecents(
 }
 
 const (
-	allClientsQuery    = `{"match": {"type": "main"}}`
+	allClientsQuery    = `{"range": {"first_seen_at": {"gte": 0}}}`
 	recentClientsQuery = `{
    "range": {
      "ping": {"gt": %q}
@@ -438,7 +438,7 @@ func (self *Indexer) searchClientsByClientId(
 	if err != nil {
 		return nil, 0, err
 	}
-	return records, len(records), nil
+	return records, 1, nil
 }
 
 // Free form search term, try to fill in as many suggestions as
@@ -468,31 +468,16 @@ func (self *Indexer) searchVerbs(ctx context.Context,
 		}
 	}
 
-	// Maybe a clientId. Only add clients the hostname or label
-	// search has not already returned.
+	// Maybe a clientId
 	if uint64(len(items)) < in.Limit {
-		res, _, err = self.searchClientsByClientId(
+		res, total, err = self.searchClientsByClientId(
 			ctx, config_obj, "client", in.Query, in)
 		if err == nil {
-			for _, record := range res {
-				if !containsClient(items, record.ClientId) {
-					items = append(items, record)
-					total++
-				}
-			}
+			items = append(items, res...)
 		}
 	}
 
 	return items, total, nil
-}
-
-func containsClient(records []*api.ClientRecord, client_id string) bool {
-	for _, record := range records {
-		if record.ClientId == client_id {
-			return true
-		}
-	}
-	return false
 }
 
 func searchClientsFromHits(

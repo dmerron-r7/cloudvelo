@@ -1,0 +1,18 @@
+{
+ "UnknownFlow FlowDetail": {
+  "context": {
+   "client_id": "C.77ad4285690698d9",
+   "session_id": "F.CUNKNOWNFLOW1",
+   "create_time": 1661391001000000000,
+   "total_requests": 1,
+   "state": 3,
+   "status": "Flow not known - maybe the client crashed?",
+   "query_stats": [
+    {
+     "status": 10,
+     "error_message": "Flow not known - maybe the client crashed?"
+    }
+   ]
+  }
+ }
+}

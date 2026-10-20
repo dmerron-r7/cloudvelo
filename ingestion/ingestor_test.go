@@ -12,9 +12,11 @@ import (
 	"github.com/Velocidex/ordereddict"
 	"github.com/stretchr/testify/suite"
 	crypto_server "www.velocidex.com/golang/cloudvelo/crypto/server"
+	ingestor_services "www.velocidex.com/golang/cloudvelo/ingestion/services"
 	"www.velocidex.com/golang/cloudvelo/ingestion/testdata"
 	"www.velocidex.com/golang/cloudvelo/schema/api"
 	cvelo_services "www.velocidex.com/golang/cloudvelo/services"
+	"www.velocidex.com/golang/cloudvelo/services/hunt_dispatcher"
 	"www.velocidex.com/golang/cloudvelo/testsuite"
 	api_proto "www.velocidex.com/golang/velociraptor/api/proto"
 	crypto_proto "www.velocidex.com/golang/velociraptor/crypto/proto"
@@ -269,6 +271,116 @@ func (self *IngestionTestSuite) TestClientEventMonitoring() {
 
 	goldie.Assert(self.T(), "TestClientEventMonitoring",
 		json.MustMarshalIndent(self.golden))
+}
+
+func (self *IngestionTestSuite) TestUnknownFlow() {
+	// To keep things stable we mock the clock to be constant.
+	closer := utils.MockTime(&utils.IncClock{NowTime: 1661391000})
+	defer closer()
+
+	client_id := "C.77ad4285690698d9"
+	flow_id := "F.CUNKNOWNFLOW1"
+
+	self.seedCollection(client_id, flow_id)
+	self.ingestGoldenMessages(self.Ctx, self.ingestor, "UnknownFlow")
+
+	flow_details := self.getFlowDetails(client_id, flow_id)
+	assert.Equal(self.T(), flows_proto.ArtifactCollectorContext_ERROR,
+		flow_details.Context.State)
+	assert.Equal(self.T(), "Flow not known - maybe the client crashed?",
+		flow_details.Context.Status)
+
+	self.golden.Set("UnknownFlow FlowDetail", flow_details)
+	goldie.Assert(self.T(), "TestUnknownFlow",
+		json.MustMarshalIndent(self.golden))
+}
+
+func (self *IngestionTestSuite) TestUnknownFlowHunt() {
+	client_id := "C.77ad4285690698d9"
+	flow_id := "F.CUNKNOWNFLOW2.H"
+	hunt_id := "H.CUNKNOWNFLOW2"
+
+	err := ingestor_services.StartHuntStatsUpdater(
+		self.Ctx, self.wg, self.ConfigObj.VeloConf())
+	assert.NoError(self.T(), err)
+
+	err = cvelo_services.SetElasticIndex(self.Ctx,
+		self.ConfigObj.OrgId, "persisted", hunt_id,
+		&hunt_dispatcher.HuntEntry{
+			HuntId:  hunt_id,
+			DocType: "hunts",
+		})
+	assert.NoError(self.T(), err)
+
+	self.seedCollection(client_id, flow_id)
+	self.ingestGoldenMessages(self.Ctx, self.ingestor, "UnknownFlowHunt")
+
+	flow_details := self.getFlowDetails(client_id, flow_id)
+	assert.Equal(self.T(), flows_proto.ArtifactCollectorContext_ERROR,
+		flow_details.Context.State)
+
+	err = ingestor_services.HuntStatsManager.Update(hunt_id).Flush(self.Ctx)
+	assert.NoError(self.T(), err)
+
+	record, err := cvelo_services.GetElasticRecord(self.Ctx,
+		self.ConfigObj.OrgId, "persisted", hunt_id)
+	assert.NoError(self.T(), err)
+
+	hunt_entry := &hunt_dispatcher.HuntEntry{}
+	err = json.Unmarshal(record, hunt_entry)
+	assert.NoError(self.T(), err)
+	assert.Equal(self.T(), uint64(0), hunt_entry.Completed)
+	assert.Equal(self.T(), uint64(0), hunt_entry.Errors)
+}
+
+func (self *IngestionTestSuite) TestUnknownFlowAfterFinished() {
+	client_id := "C.77ad4285690698d9"
+	flow_id := "F.CUNKNOWNFLOW3"
+
+	self.seedCollection(client_id, flow_id)
+	self.ingestGoldenMessages(self.Ctx, self.ingestor, "UnknownFlowFinished")
+
+	flow_details := self.getFlowDetails(client_id, flow_id)
+	assert.Equal(self.T(), flows_proto.ArtifactCollectorContext_FINISHED,
+		flow_details.Context.State)
+
+	records, _, err := cvelo_services.QueryElasticRaw(self.Ctx,
+		self.ConfigObj.OrgId, "transient",
+		json.Format(getCollectionQuery, client_id, flow_id, "collection"))
+	assert.NoError(self.T(), err)
+
+	// Only the seeded record and the completed stats.
+	assert.Equal(self.T(), 2, len(records))
+	for _, record := range records {
+		assert.NotContains(self.T(), string(record), "Flow not known")
+	}
+}
+
+func (self *IngestionTestSuite) seedCollection(client_id, flow_id string) {
+	err := cvelo_services.SetElasticIndex(self.Ctx,
+		self.ConfigObj.OrgId, "transient", cvelo_services.DocIdRandom,
+		api.ArtifactCollectorRecordFromProto(
+			&flows_proto.ArtifactCollectorContext{
+				ClientId:   client_id,
+				SessionId:  flow_id,
+				CreateTime: uint64(utils.GetTime().Now().UnixNano()),
+			}, flow_id))
+	assert.NoError(self.T(), err)
+}
+
+func (self *IngestionTestSuite) getFlowDetails(
+	client_id, flow_id string) *api_proto.FlowDetails {
+	config_obj := self.ConfigObj.VeloConf()
+
+	launcher, err := services.GetLauncher(config_obj)
+	assert.NoError(self.T(), err)
+
+	flow_details, err := launcher.GetFlowDetails(
+		self.Ctx, config_obj, services.GetFlowOptions{},
+		client_id, flow_id)
+	assert.NoError(self.T(), err)
+
+	return flow_details
 }
 
 func (self *IngestionTestSuite) SetupTest() {

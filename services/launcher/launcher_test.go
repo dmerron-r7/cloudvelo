@@ -420,6 +420,7 @@ func (self *LauncherTestSuite) TestResumeFlowIsRefused() {
 		flow: &flows_proto.ArtifactCollectorContext{
 			ClientId:  "C.resumefinished",
 			SessionId: "F.resumefinished",
+			Request:   &flows_proto.ArtifactCollectorArgs{Timeout: 600},
 			State:     flows_proto.ArtifactCollectorContext_FINISHED,
 			QueryStats: []*crypto_proto.VeloStatus{{
 				Status:     crypto_proto.VeloStatus_OK,
@@ -431,6 +432,7 @@ func (self *LauncherTestSuite) TestResumeFlowIsRefused() {
 		flow: &flows_proto.ArtifactCollectorContext{
 			ClientId:  "C.resumeerror",
 			SessionId: "F.resumeerror",
+			Request:   &flows_proto.ArtifactCollectorArgs{Timeout: 600},
 			State:     flows_proto.ArtifactCollectorContext_ERROR,
 			Status:    "query failed",
 			QueryStats: []*crypto_proto.VeloStatus{{

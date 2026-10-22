@@ -4,12 +4,15 @@ import (
 	"context"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"www.velocidex.com/golang/cloudvelo/schema/api"
 	"www.velocidex.com/golang/cloudvelo/services"
+	"www.velocidex.com/golang/cloudvelo/services/launcher"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
 	crypto_proto "www.velocidex.com/golang/velociraptor/crypto/proto"
 	flows_proto "www.velocidex.com/golang/velociraptor/flows/proto"
-	velo_services "www.velocidex.com/golang/velociraptor/services"
+	"www.velocidex.com/golang/velociraptor/logging"
 	velo_utils "www.velocidex.com/golang/velociraptor/utils"
 )
 
@@ -34,16 +37,25 @@ func (self Ingestor) HandleFlowStats(
 	// alone.
 	unknown_flow := isUnknownFlowReply(msg)
 	if unknown_flow {
-		running, err := isFlowRunning(ctx, config_obj,
-			message.Source, message.SessionId)
-		if err != nil || !running {
-			return err
+		// A flow that is missing or already finished must not be
+		// changed by a late reply.
+		collection_context, err := launcher.LoadCollectionContextFromIndex(
+			ctx, config_obj, message.Source, message.SessionId)
+		if err != nil {
+			if !velo_utils.IsNotFound(err) {
+				logger := logging.GetLogger(config_obj, &logging.FrontendComponent)
+				logger.Error("HandleFlowStats: Unable to load flow %v for %v: %v",
+					message.SessionId, message.Source, err)
+			}
+			return nil
 		}
 
-		query_stats = []*crypto_proto.VeloStatus{{
-			Status:       crypto_proto.VeloStatus_GENERIC_ERROR,
-			ErrorMessage: msg.QueryStatus[0].GetErrorMessage(),
-		}}
+		if launcher.IsTerminalFlowState(collection_context.State) {
+			return nil
+		}
+
+		query_stats = failRunningQueries(collection_context.QueryStats,
+			msg.QueryStatus[0].GetErrorMessage())
 	}
 
 	collector_context := &flows_proto.ArtifactCollectorContext{
@@ -103,36 +115,38 @@ func isUnknownFlowReply(msg *crypto_proto.FlowStats) bool {
 	}
 
 	status := msg.QueryStatus[0]
-	return status.GetStatus() == crypto_proto.VeloStatus_UNKNOWN_FLOW ||
-		strings.HasPrefix(status.GetErrorMessage(), "Flow not known")
+	switch status.GetStatus() {
+	case crypto_proto.VeloStatus_UNKNOWN_FLOW:
+		return true
+	case crypto_proto.VeloStatus_OK:
+		return false
+	}
+	return strings.HasPrefix(status.GetErrorMessage(), "Flow not known")
 }
 
-// A flow that is missing or already finished must not be changed by
-// a late reply.
-func isFlowRunning(
-	ctx context.Context,
-	config_obj *config_proto.Config,
-	client_id, flow_id string) (bool, error) {
+// Fails the queries that were still running and keeps the stats of
+// the ones that completed.
+func failRunningQueries(
+	query_stats []*crypto_proto.VeloStatus,
+	error_message string) []*crypto_proto.VeloStatus {
 
-	launcher, err := velo_services.GetLauncher(config_obj)
-	if err != nil {
-		return false, err
+	var result []*crypto_proto.VeloStatus
+	for _, s := range query_stats {
+		s = proto.Clone(s).(*crypto_proto.VeloStatus)
+		if s.Status == crypto_proto.VeloStatus_PROGRESS {
+			s.Status = crypto_proto.VeloStatus_GENERIC_ERROR
+			s.ErrorMessage = error_message
+		}
+		result = append(result, s)
 	}
 
-	collection_context, err := launcher.Storage().LoadCollectionContext(
-		ctx, config_obj, client_id, flow_id)
-	if velo_utils.IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-
-	switch collection_context.State {
-	case flows_proto.ArtifactCollectorContext_FINISHED,
-		flows_proto.ArtifactCollectorContext_ERROR:
-		return false, nil
+	// The client never reported any queries for this flow.
+	if len(result) == 0 {
+		result = append(result, &crypto_proto.VeloStatus{
+			Status:       crypto_proto.VeloStatus_GENERIC_ERROR,
+			ErrorMessage: error_message,
+		})
 	}
 
-	return true, nil
+	return result
 }

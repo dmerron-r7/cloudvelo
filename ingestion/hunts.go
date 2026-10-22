@@ -64,11 +64,6 @@ func calcFlowOutcome(collection_context *flows_proto.ArtifactCollectorContext) (
 		case crypto_proto.VeloStatus_GENERIC_ERROR:
 			failed = true
 
-			// The client does not know the flow so it can not
-			// complete it.
-		case crypto_proto.VeloStatus_UNKNOWN_FLOW:
-			failed = true
-
 			// This query is ok
 		case crypto_proto.VeloStatus_OK:
 		}

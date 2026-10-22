@@ -21,14 +21,6 @@ func TestCalcFlowOutcome(t *testing.T) {
 			crypto_proto.VeloStatus_PROGRESS}, false, false},
 		{"GENERIC_ERROR", []crypto_proto.VeloStatus_ReturnedStatus{
 			crypto_proto.VeloStatus_GENERIC_ERROR}, true, true},
-		{"UNKNOWN_FLOW", []crypto_proto.VeloStatus_ReturnedStatus{
-			crypto_proto.VeloStatus_UNKNOWN_FLOW}, true, true},
-		{"OK+UNKNOWN_FLOW", []crypto_proto.VeloStatus_ReturnedStatus{
-			crypto_proto.VeloStatus_OK,
-			crypto_proto.VeloStatus_UNKNOWN_FLOW}, true, true},
-		{"PROGRESS+UNKNOWN_FLOW", []crypto_proto.VeloStatus_ReturnedStatus{
-			crypto_proto.VeloStatus_PROGRESS,
-			crypto_proto.VeloStatus_UNKNOWN_FLOW}, false, false},
 		{"OK+GENERIC_ERROR", []crypto_proto.VeloStatus_ReturnedStatus{
 			crypto_proto.VeloStatus_OK,
 			crypto_proto.VeloStatus_GENERIC_ERROR}, true, true},

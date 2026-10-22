@@ -34,13 +34,13 @@ func TestIsUnknownFlowReply(t *testing.T) {
 				ErrorMessage: "Flow not known - maybe the client crashed?",
 			}},
 		}, true},
-		{"prefix with OK", &crypto_proto.FlowStats{
+		{"prefix with OK is not matched", &crypto_proto.FlowStats{
 			FlowComplete: true,
 			QueryStatus: []*crypto_proto.VeloStatus{{
 				Status:       crypto_proto.VeloStatus_OK,
 				ErrorMessage: "Flow not known",
 			}},
-		}, true},
+		}, false},
 		{"flow not complete", &crypto_proto.FlowStats{
 			QueryStatus: []*crypto_proto.VeloStatus{{
 				Status:       crypto_proto.VeloStatus_UNKNOWN_FLOW,

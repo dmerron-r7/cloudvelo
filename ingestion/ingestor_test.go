@@ -290,6 +290,17 @@ func (self *IngestionTestSuite) TestUnknownFlow() {
 	assert.Equal(self.T(), "Flow not known - maybe the client crashed?",
 		flow_details.Context.Status)
 
+	// Only the query that was still running fails.
+	assert.Equal(self.T(), int64(3), flow_details.Context.TotalRequests)
+	assert.Equal(self.T(), uint64(12), flow_details.Context.TotalCollectedRows)
+	assert.Equal(self.T(), uint64(2048), flow_details.Context.TotalUploadedBytes)
+	assert.Equal(self.T(), crypto_proto.VeloStatus_OK,
+		flow_details.Context.QueryStats[0].Status)
+	assert.Equal(self.T(), crypto_proto.VeloStatus_OK,
+		flow_details.Context.QueryStats[1].Status)
+	assert.Equal(self.T(), crypto_proto.VeloStatus_GENERIC_ERROR,
+		flow_details.Context.QueryStats[2].Status)
+
 	self.golden.Set("UnknownFlow FlowDetail", flow_details)
 	goldie.Assert(self.T(), "TestUnknownFlow",
 		json.MustMarshalIndent(self.golden))
@@ -300,8 +311,19 @@ func (self *IngestionTestSuite) TestUnknownFlowHunt() {
 	flow_id := "F.CUNKNOWNFLOW2.H"
 	hunt_id := "H.CUNKNOWNFLOW2"
 
+	// Scope the hunt stats updater to this test so later tests see
+	// the previous manager.
+	previous := ingestor_services.HuntStatsManager
+	ctx, cancel := context.WithCancel(self.Ctx)
+	wg := &sync.WaitGroup{}
+	defer func() {
+		cancel()
+		wg.Wait()
+		ingestor_services.HuntStatsManager = previous
+	}()
+
 	err := ingestor_services.StartHuntStatsUpdater(
-		self.Ctx, self.wg, self.ConfigObj.VeloConf())
+		ctx, wg, self.ConfigObj.VeloConf())
 	assert.NoError(self.T(), err)
 
 	err = cvelo_services.SetElasticIndex(self.Ctx,
@@ -354,6 +376,23 @@ func (self *IngestionTestSuite) TestUnknownFlowAfterFinished() {
 	for _, record := range records {
 		assert.NotContains(self.T(), string(record), "Flow not known")
 	}
+}
+
+func (self *IngestionTestSuite) TestUnknownFlowLookupFailure() {
+	data, err := testdata.FS.ReadFile("UnknownFlow/Msg_02.json")
+	assert.NoError(self.T(), err)
+
+	message := &crypto_proto.VeloMessage{}
+	err = json.Unmarshal(data, message)
+	assert.NoError(self.T(), err)
+
+	// The flow lookup fails, which must not fail the rest of the
+	// client's batch.
+	ctx, cancel := context.WithCancel(self.Ctx)
+	cancel()
+
+	err = self.ingestor.HandleFlowStats(ctx, self.ConfigObj.VeloConf(), message)
+	assert.NoError(self.T(), err)
 }
 
 func (self *IngestionTestSuite) seedCollection(client_id, flow_id string) {

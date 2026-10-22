@@ -9,6 +9,8 @@ import (
 	"github.com/Velocidex/ordereddict"
 	"github.com/alecthomas/assert"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	cvelo_api "www.velocidex.com/golang/cloudvelo/schema/api"
@@ -463,6 +465,7 @@ func (self *LauncherTestSuite) TestResumeFlowIsRefused() {
 			transactions, err := launcher.ResumeFlow(
 				self.Ctx, config_obj, client_id, flow_id)
 			assert.Error(self.T(), err)
+			assert.Equal(self.T(), codes.Unimplemented, status.Code(err))
 			assert.Nil(self.T(), transactions)
 
 			err = cvelo_services.FlushBulkIndexer()

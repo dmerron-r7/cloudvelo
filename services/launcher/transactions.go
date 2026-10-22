@@ -2,13 +2,14 @@ package launcher
 
 import (
 	"context"
-	"errors"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	actions_proto "www.velocidex.com/golang/velociraptor/actions/proto"
 	config_proto "www.velocidex.com/golang/velociraptor/config/proto"
 )
 
-var resumeFlowNotSupportedError = errors.New(
+var resumeFlowNotSupportedError = status.Error(codes.Unimplemented,
 	"ResumeFlow not supported: upload transactions are not recorded")
 
 // ResumeFlow is refused because cloudvelo does not record upload

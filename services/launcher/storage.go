@@ -288,7 +288,7 @@ func (self *FlowStorageManager) LoadCollectionContext(
 
 		// The snapshot is per process with no cross process invalidation,
 		// so a non terminal entry may already be superseded.
-		if pres && hit != nil && isTerminalFlowState(hit.State) {
+		if pres && hit != nil && IsTerminalFlowState(hit.State) {
 			cvelo_services.Count("LoadCollectionContext (Cached)")
 			return hit, nil
 		}
@@ -298,7 +298,7 @@ func (self *FlowStorageManager) LoadCollectionContext(
 }
 
 // FINISHED and ERROR are the only states a collection does not leave.
-func isTerminalFlowState(
+func IsTerminalFlowState(
 	state flows_proto.ArtifactCollectorContext_State) bool {
 	return state == flows_proto.ArtifactCollectorContext_FINISHED ||
 		state == flows_proto.ArtifactCollectorContext_ERROR
@@ -307,6 +307,15 @@ func isTerminalFlowState(
 // The old slow version of LoadCollectionContext.
 // TODO: Remove when the new code is working well.
 func (self *FlowStorageManager) LoadCollectionContextSlow(
+	ctx context.Context,
+	config_obj *config_proto.Config,
+	client_id, flow_id string) (*flows_proto.ArtifactCollectorContext, error) {
+
+	return LoadCollectionContextFromIndex(ctx, config_obj, client_id, flow_id)
+}
+
+// Folds the collection records of one flow from the index.
+func LoadCollectionContextFromIndex(
 	ctx context.Context,
 	config_obj *config_proto.Config,
 	client_id, flow_id string) (*flows_proto.ArtifactCollectorContext, error) {
